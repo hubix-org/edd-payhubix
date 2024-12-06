@@ -1,13 +1,13 @@
 <?php
 /**
- * Plugin Name: Payhubix Payment Gateway for Easy Digital Downloads
+ * Plugin Name: Payhubix Gateway for Easy Digital Downloads
  * Plugin URI: https://payhubix.com
  * Description: Integrates Payhubix payment gateway with Easy Digital Downloads
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: Payhubix TM, Mohammad Bina
  * Author URI: https://payhubix.com
  * License: GPL-2.0+
- * Text Domain: payhubix-edd-gateway
+ * Text Domain: payhubix-gateway-edd
  */
 
 if (!defined('ABSPATH')) {
@@ -38,13 +38,13 @@ class Payhubix_EDD_Gateway {
     public function register_gateway($gateways) {
         $gateways['payhubix'] = array(
             'admin_label' => 'Payhubix',
-            'checkout_label' => __('Pay with Payhubix', 'payhubix-edd-gateway')
+            'checkout_label' => __('Pay with Payhubix', 'payhubix-gateway-edd')
         );
         return $gateways;
     }
 
     public function add_gateway_section($sections) {
-        $sections['payhubix'] = __('Payhubix', 'payhubix-edd-gateway');
+        $sections['payhubix'] = __('Payhubix', 'payhubix-gateway-edd');
         return $sections;
     }
 
@@ -52,24 +52,24 @@ class Payhubix_EDD_Gateway {
         $payhubix_settings = array(
             array(
                 'id' => 'payhubix_settings',
-                'name' => '<strong>' . __('Payhubix Settings', 'payhubix-edd-gateway') . '</strong>',
+                'name' => '<strong>' . __('Payhubix Settings', 'payhubix-gateway-edd') . '</strong>',
                 'type' => 'header',
             ),
             array(
                 'id' => 'payhubix_api_key',
-                'name' => __('Payhubix API Key', 'payhubix-edd-gateway'),
+                'name' => __('Payhubix API Key', 'payhubix-gateway-edd'),
                 'type' => 'textarea',
-                'desc' => __('Enter your Payhubix API Key', 'payhubix-edd-gateway')
+                'desc' => __('Enter your Payhubix API Key', 'payhubix-gateway-edd')
             ),
             array(
                 'id' => 'payhubix_shop_id',
-                'name' => __('Payhubix Shop ID', 'payhubix-edd-gateway'),
+                'name' => __('Payhubix Shop ID', 'payhubix-gateway-edd'),
                 'type' => 'text',
-                'desc' => __('Enter your Payhubix Shop ID', 'payhubix-edd-gateway')
+                'desc' => __('Enter your Payhubix Shop ID', 'payhubix-gateway-edd')
             ),
             array(
                 'id' => 'payhubix_time_for_payment',
-                'name' => __('Time for Payment', 'payhubix-edd-gateway'),
+                'name' => __('Time for Payment', 'payhubix-gateway-edd'),
                 'type' => 'select',
                 'options' => array(
                     '00:15' => '15 minutes',
@@ -78,15 +78,14 @@ class Payhubix_EDD_Gateway {
                     '02:00' => '2 hours',
                     '03:00' => '3 hours',
                 ),
-                'desc' => __('Select the time allowed for payment', 'payhubix-edd-gateway')
+                'desc' => __('Select the time allowed for payment', 'payhubix-gateway-edd')
             )
         );
 
-        if (current_filter() === 'edd_settings_gateways') {
-            $settings = array_merge($settings, $payhubix_settings);
-        }
+        $gateway_settings = $settings;
+        $gateway_settings['payhubix'] = $payhubix_settings;
 
-        return $settings;
+        return $gateway_settings;
     }
 
     public function payment_form() {
@@ -99,7 +98,7 @@ class Payhubix_EDD_Gateway {
         $this->time_for_payment = edd_get_option('payhubix_time_for_payment', '02:00');
 
         if (empty($this->api_key) || empty($this->shop_id)) {
-            edd_set_error('payhubix_config_error', __('Payhubix gateway is not configured correctly.', 'payhubix-edd-gateway'));
+            edd_set_error('payhubix_config_error', __('Payhubix gateway is not configured correctly.', 'payhubix-gateway-edd'));
             edd_send_back_to_checkout();
             return;
         }
@@ -151,7 +150,7 @@ class Payhubix_EDD_Gateway {
         ];
 
         $args = [
-            'body'        => json_encode($data),
+            'body'        => wp_json_encode($data),
             'headers'     => [
                 'Content-Type' => 'application/json',
                 'X-Api-key'    => $this->api_key,
@@ -183,14 +182,13 @@ class Payhubix_EDD_Gateway {
 
     public function listen_for_payhubix_callback() {
 
-        if (!isset($_GET['edd-listener']) || $_GET['edd-listener'] !== 'payhubix') {
+        if (!isset($_GET['order_id']) || !isset($_GET['edd-listener']) || $_GET['edd-listener'] !== 'payhubix') {
             return;
         }
 
-        $payment_id = $_GET['order_id'];
+        $payment_id = sanitize_text_field(wp_unslash($_GET['order_id']));
         
         if (!$payment_id) {
-            error_log('Payhubix callback: Payment not found for key ' . $_GET['key']);
             wp_redirect(edd_get_checkout_uri());
             exit;
         }
@@ -203,7 +201,6 @@ class Payhubix_EDD_Gateway {
             $invoice_data = $data['message'];
 
             if ($invoice_id != $invoice_data['link']) {
-                error_log('Payhubix callback: Invoice ID mismatch for payment ' . $payment_id);
                 wp_redirect(edd_get_checkout_uri());
                 exit;
             }
@@ -212,6 +209,8 @@ class Payhubix_EDD_Gateway {
                 case 'Paid':
                     edd_update_payment_status($payment_id, 'complete');
                     edd_insert_payment_note($payment_id, 'Payment successfully processed by Payhubix.');
+                    wp_redirect(edd_get_success_page_uri());
+                    exit;
                     break;
 
                 case 'Canceled':
@@ -231,10 +230,9 @@ class Payhubix_EDD_Gateway {
                     break;
             }
 
-            wp_redirect(edd_get_success_page_uri());
+            wp_redirect(edd_get_failed_transaction_uri());
             exit;
         } else {
-            error_log('Payhubix callback error: ' . json_encode($data));
             wp_redirect(edd_get_checkout_uri());
             exit;
         }
