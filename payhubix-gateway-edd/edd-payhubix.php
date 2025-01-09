@@ -3,7 +3,7 @@
  * Plugin Name: Payhubix Gateway for Easy Digital Downloads
  * Plugin URI: https://payhubix.com
  * Description: Integrates Payhubix payment gateway with Easy Digital Downloads
- * Version: 1.1.0
+ * Version: 1.1.1
  * Author: Payhubix TM, Mohammad Bina
  * Author URI: https://payhubix.com
  * License: GPL-2.0+
@@ -136,7 +136,7 @@ class Payhubix_EDD_Gateway {
      * Make API call to Payhubix
      */
     private function call_payhubix_api($payment_id, $purchase_data) {
-        $url = 'https://api.payhubix.com/v1/payment/shops/' . $this->shop_id . '/invoices/';
+        $url = 'https://api.payhubix.com/v1/invoices/';
         
         $data = [
             'currency_amount'   => (float) $purchase_data['price'],
@@ -145,6 +145,7 @@ class Payhubix_EDD_Gateway {
             'time_for_payment'  => $this->time_for_payment,
             'currencies'        => [],
             'order_id'          => $payment_id,
+            'shop_id'           => $this->shop_id,
             'order_description'=> 'Digital Download Purchase',
             'callback_url'      => add_query_arg(['edd-listener' => 'payhubix', 'order_id' => $payment_id], home_url('index.php')),
         ];
@@ -239,7 +240,7 @@ class Payhubix_EDD_Gateway {
     }
 
     private function check_payment_status($invoice_id) {
-        $url = 'https://api.payhubix.com/v1/payment/invoices/' . $invoice_id;
+        $url = 'https://api.payhubix.com/v1/invoices/' . $invoice_id;
 
         $args = [
             'headers' => [
